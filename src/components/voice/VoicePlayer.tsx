@@ -1,3 +1,7 @@
+const SERVER_ORIGIN = (
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api"
+).replace(/\/api\/?$/, "");
+
 interface Props {
   audioUrl?: string;
 }
@@ -13,7 +17,7 @@ export default function VoicePlayer({ audioUrl }: Props) {
     >
       <audio
         controls
-        src={"http://localhost:8000" + audioUrl}
+        src={SERVER_ORIGIN + audioUrl}
         style={{ width: "100%" }}
       />
     </div>

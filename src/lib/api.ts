@@ -158,26 +158,172 @@ export interface MandiStatus {
 }
 
 // ============================================================
+// AUTH TYPES
+// ============================================================
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  village?: string;
+  district?: string;
+  state?: string;
+  landArea?: number;
+  location?: string;
+  farm_size?: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export interface LoginPayload {
+  phone?: string;
+  email?: string;
+  password: string;
+}
+
+export interface SignupPayload {
+  name: string;
+  phone?: string;
+  email?: string;
+  password: string;
+  village: string;
+  district: string;
+  state: string;
+  landArea: number;
+}
+
+export interface DashboardStats {
+  analyses: number | string;
+  grade1_pct: string;
+  markets: number | string;
+}
+
+export interface DashboardProfile {
+  initials: string;
+  name: string;
+  location: string;
+  farm_size: string;
+  stats: DashboardStats;
+  season_earnings: number;
+  season_change_pct: number;
+}
+
+export interface EarningsPoint {
+  month: string;
+  earnings: number;
+}
+
+export interface EarningsResponse {
+  earnings: EarningsPoint[];
+}
+
+export interface ScanHistoryItem {
+  id: string;
+  crop: string;
+  grade: string;
+  score: number;
+  date: string;
+  price: number;
+  image_url?: string | null;
+}
+
+export interface ScanHistoryResponse {
+  scans: ScanHistoryItem[];
+  total: number;
+}
+
+export interface PredictionHistoryItem {
+  crop: string;
+  predicted_price: number;
+  actual_price: number;
+  accurate: boolean;
+  date: string;
+}
+
+export interface PredictionHistoryResponse {
+  predictions: PredictionHistoryItem[];
+}
+
+// ============================================================
 // AUTH
 // ============================================================
 
-export function isAuthenticated(): boolean {
-  if (
-    typeof window ===
-    "undefined"
-  ) {
-    return false;
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string") return detail;
   }
+  return fallback;
+}
 
-  const token =
-    localStorage.getItem(
-      "token"
-    ) ||
-    localStorage.getItem(
-      "access_token"
+export function isAuthenticated(): boolean {
+  return Boolean(getToken());
+}
+
+export async function login(
+  payload: LoginPayload
+): Promise<AuthResponse> {
+  try {
+    const response = await client.post<AuthResponse>(
+      "/auth/login",
+      payload
     );
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      extractErrorMessage(error, "Invalid phone/email or password.")
+    );
+  }
+}
 
-  return Boolean(token);
+export async function signup(
+  payload: SignupPayload
+): Promise<AuthResponse> {
+  try {
+    const response = await client.post<AuthResponse>(
+      "/auth/signup",
+      payload
+    );
+    return response.data;
+  } catch (error) {
+    throw new Error(
+      extractErrorMessage(error, "Registration failed.")
+    );
+  }
+}
+
+export function setToken(
+  token: string,
+  persistence: "local" | "session" = "local"
+): void {
+  if (typeof window === "undefined") return;
+
+  // Clear both stores first so a stale token from a previous
+  // "remember me" choice never lingers alongside the new one.
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+
+  const store = persistence === "session" ? sessionStorage : localStorage;
+  store.setItem("token", token);
+}
+
+export function logout(): void {
+  if (typeof window === "undefined") return;
+
+  localStorage.removeItem("token");
+  localStorage.removeItem("access_token");
+  sessionStorage.removeItem("token");
+  sessionStorage.removeItem("access_token");
+}
+
+export async function getCurrentUser(): Promise<UserProfile> {
+  const response = await client.get<UserProfile>("/auth/me");
+  return response.data;
 }
 
 // ============================================================
@@ -193,12 +339,10 @@ function getToken(): string | null {
   }
 
   return (
-    localStorage.getItem(
-      "token"
-    ) ||
-    localStorage.getItem(
-      "access_token"
-    )
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token") ||
+    localStorage.getItem("access_token") ||
+    sessionStorage.getItem("access_token")
   );
 }
 
@@ -242,6 +386,13 @@ client.interceptors.response.use(
       console.warn(
         "[API] Authentication expired."
       );
+
+      // A 401 means the stored token is invalid or expired. Clear it
+      // so isAuthenticated() (a simple "is there a token?" check)
+      // stops reporting a logged-in state that the backend already
+      // rejected - otherwise every page keeps trying authenticated
+      // requests that can only ever fail.
+      logout();
     }
 
     return Promise.reject(
@@ -627,6 +778,38 @@ export async function getNearbyMandis(
 }
 
 // ============================================================
+// DASHBOARD DATA
+// ============================================================
+
+export async function getUserProfile(): Promise<DashboardProfile> {
+  const response = await client.get<DashboardProfile>(
+    "/history/profile"
+  );
+  return response.data;
+}
+
+export async function getEarnings(): Promise<EarningsResponse> {
+  const response = await client.get<EarningsResponse>(
+    "/history/earnings"
+  );
+  return response.data;
+}
+
+export async function getScanHistory(): Promise<ScanHistoryResponse> {
+  const response = await client.get<ScanHistoryResponse>(
+    "/history/scans"
+  );
+  return response.data;
+}
+
+export async function getPredictionHistory(): Promise<PredictionHistoryResponse> {
+  const response = await client.get<PredictionHistoryResponse>(
+    "/history/predictions"
+  );
+  return response.data;
+}
+
+// ============================================================
 // MANDI STATUS
 // ============================================================
 
@@ -784,6 +967,24 @@ export const api = {
   predictCrop,
 
   isAuthenticated,
+
+  login,
+
+  signup,
+
+  logout,
+
+  setToken,
+
+  getCurrentUser,
+
+  getUserProfile,
+
+  getEarnings,
+
+  getScanHistory,
+
+  getPredictionHistory,
 
   getBrowserLocation,
 

@@ -19,8 +19,24 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/components/PageHeader";
 import { useI18n } from "@/i18n/I18nProvider";
-import { api, CropPredictionResponse } from "@/lib/api";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
+
+type CropPredictionResponse = {
+  crop: string;
+  grade: string;
+  is_tomato: boolean;
+  confidence: number;
+  freshness: number;
+  quality: number;
+  price: number;
+  recommendation: string;
+  best_market: {
+    name: string;
+    distance_km: number;
+    travel_time: string;
+  };
+};
 
 export const Route = createFileRoute("/crop-grading")({
   head: () => ({
@@ -56,6 +72,8 @@ function CropGrading() {
   // Camera state
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraStream, setCameraStream] =
+    useState<MediaStream | null>(null);
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
@@ -77,13 +95,13 @@ function CropGrading() {
     startAnalysis(file);
   };
 
-  const startAnalysis = async (file?: File) => {
+  const startAnalysis = async (file: File) => {
     setResult(null);
     setLoading(true);
 
     try {
       const prediction = await api.predictCrop(file);
-      setResult(prediction);
+      setResult(prediction as CropPredictionResponse);
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -131,25 +149,10 @@ function CropGrading() {
         });
 
       streamRef.current = stream;
+      setCameraStream(stream);
 
       setCameraOpen(true);
       setCameraReady(false);
-
-      // Wait for modal/video to render
-      setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-
-          videoRef.current
-            .play()
-            .then(() => {
-              setCameraReady(true);
-            })
-            .catch(() => {
-              toast.error("Unable to start camera preview.");
-            });
-        }
-      }, 100);
     } catch (error) {
       console.error("Camera error:", error);
 
@@ -189,12 +192,44 @@ function CropGrading() {
       streamRef.current = null;
     }
 
+    setCameraStream(null);
+
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
 
     setCameraReady(false);
   };
+
+  useEffect(() => {
+    if (!cameraOpen || !cameraStream || !videoRef.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    video.srcObject = cameraStream;
+
+    const startPreview = async () => {
+      try {
+        await video.play();
+        setCameraReady(video.readyState >= 2);
+      } catch {
+        toast.error("Unable to start camera preview.");
+      }
+    };
+
+    if (video.readyState >= 2) {
+      void startPreview();
+    } else {
+      video.addEventListener("loadedmetadata", startPreview, {
+        once: true,
+      });
+    }
+
+    return () => {
+      video.removeEventListener("loadedmetadata", startPreview);
+    };
+  }, [cameraOpen, cameraStream]);
 
   /*
    * ============================================
@@ -415,7 +450,9 @@ function CropGrading() {
               {!preview && (
                 <button
                   type="button"
-                  onClick={() => startAnalysis()}
+                  onClick={() => {
+                    toast.info("Please capture or upload a tomato image first.");
+                  }}
                   className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-primary underline-offset-4 hover:underline"
                 >
                   <Sparkles
@@ -749,10 +786,9 @@ function ResultCard({
   const normalizedGrade =
     String(result.grade || "").toUpperCase();
 
-  const isGradeA = normalizedGrade.includes("A");
-  const isGradeB = normalizedGrade.includes("B");
-
-  const accepted = isGradeA || isGradeB;
+  const accepted =
+    result.is_tomato === true &&
+    result.grade !== "Rejected";
 
   const bars = [
     {
@@ -846,8 +882,8 @@ function ResultCard({
 
           <span>
             {accepted
-              ? t("grading.accepted")
-              : t("grading.rejected")}
+              ? "Accepted"
+              : "Rejected"}
           </span>
         </div>
       </header>

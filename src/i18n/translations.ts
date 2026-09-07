@@ -31,6 +31,9 @@ const en = {
   "nav.language": "Language",
   "nav.menu": "Menu",
   "nav.theme": "Toggle theme",
+  "nav.alerts": "Weather alerts",
+  "nav.alerts.empty": "No weather alerts right now",
+  "nav.alerts.viewWeather": "View full forecast",
 
   /* ---------- HERO ---------- */
   "hero.badge": "AI powered agriculture platform",
@@ -246,6 +249,9 @@ const hi: Dict = {
   "nav.language": "भाषा",
   "nav.menu": "मेन्यू",
   "nav.theme": "थीम बदलें",
+  "nav.alerts": "मौसम चेतावनियाँ",
+  "nav.alerts.empty": "अभी कोई मौसम चेतावनी नहीं है",
+  "nav.alerts.viewWeather": "पूरा पूर्वानुमान देखें",
 
   "hero.badge": "एआई आधारित कृषि प्लेटफ़ॉर्म",
   "hero.title": "आर्टिफिशियल इंटेलिजेंस से स्मार्ट खेती",
@@ -445,6 +451,9 @@ const kn: Dict = {
   "nav.language": "ಭಾಷೆ",
   "nav.menu": "ಮೆನು",
   "nav.theme": "ಥೀಮ್ ಬದಲಿಸಿ",
+  "nav.alerts": "ಹವಾಮಾನ ಎಚ್ಚರಿಕೆಗಳು",
+  "nav.alerts.empty": "ಈಗ ಯಾವುದೇ ಹವಾಮಾನ ಎಚ್ಚರಿಕೆ ಇಲ್ಲ",
+  "nav.alerts.viewWeather": "ಪೂರ್ಣ ಮುನ್ಸೂಚನೆ ನೋಡಿ",
 
   "hero.badge": "ಎಐ ಆಧಾರಿತ ಕೃಷಿ ವೇದಿಕೆ",
   "hero.title": "ಕೃತಕ ಬುದ್ಧಿಮತ್ತೆಯಿಂದ ಸ್ಮಾರ್ಟ್ ಕೃಷಿ",
@@ -643,6 +652,9 @@ const ta: Dict = {
   "nav.language": "மொழி",
   "nav.menu": "பட்டி",
   "nav.theme": "தீம் மாற்று",
+  "nav.alerts": "வானிலை எச்சரிக்கைகள்",
+  "nav.alerts.empty": "இப்போது எந்த வானிலை எச்சரிக்கையும் இல்லை",
+  "nav.alerts.viewWeather": "முழு முன்னறிவிப்பைப் பார்க்கவும்",
 
   "hero.badge": "AI அடிப்படையிலான விவசாய தளம்",
   "hero.title": "செயற்கை நுண்ணறிவால் ஸ்மார்ட் விவசாயம்",
@@ -841,6 +853,9 @@ const te: Dict = {
   "nav.language": "భాష",
   "nav.menu": "మెనూ",
   "nav.theme": "థీమ్ మార్చండి",
+  "nav.alerts": "వాతావరణ హెచ్చరికలు",
+  "nav.alerts.empty": "ప్రస్తుతం ఎలాంటి వాతావరణ హెచ్చరికలు లేవు",
+  "nav.alerts.viewWeather": "పూర్తి సూచనను చూడండి",
 
   "hero.badge": "AI ఆధారిత వ్యవసాయ వేదిక",
   "hero.title": "కృత్రిమ మేధతో స్మార్ట్ వ్యవసాయం",
@@ -1039,6 +1054,9 @@ const ml: Dict = {
   "nav.language": "ഭാഷ",
   "nav.menu": "മെനു",
   "nav.theme": "തീം മാറ്റുക",
+  "nav.alerts": "കാലാവസ്ഥാ മുന്നറിയിപ്പുകൾ",
+  "nav.alerts.empty": "ഇപ്പോൾ കാലാവസ്ഥാ മുന്നറിയിപ്പുകൾ ഇല്ല",
+  "nav.alerts.viewWeather": "പൂർണ്ണ പ്രവചനം കാണുക",
 
   "hero.badge": "AI അധിഷ്ഠിത കാർഷിക പ്ലാറ്റ്ഫോം",
   "hero.title": "നിർമ്മിത ബുദ്ധിയാൽ സ്മാർട്ട് കൃഷി",

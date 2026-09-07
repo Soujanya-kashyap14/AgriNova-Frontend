@@ -85,8 +85,8 @@ function ContactPage() {
   };
 
   const channels = [
-    { Icon: Phone, label: "Call us", value: "1800-180-1551", href: "tel:18001801551" },
-    { Icon: Mail, label: "Email", value: "support@ecoagri.in", href: "mailto:support@ecoagri.in" },
+    { Icon: Phone, label: "Call us", value: "7899662394", href: "tel:+917899662394" },
+    { Icon: Mail, label: "Email", value: "kashyapsoujanya@gmail.com", href: "mailto:kashyapsoujanya@gmail.com" },
     { Icon: MessageCircle, label: "WhatsApp", value: "+91 98450 12345", href: "https://wa.me/919845012345" },
   ];
 

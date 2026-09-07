@@ -8,16 +8,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Bell, Heart, ImageIcon, Star, TrendingUp, Wallet, Camera } from "lucide-react";
+import { Heart, ImageIcon, Star, TrendingUp, Wallet, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { useI18n } from "@/i18n/I18nProvider";
-import { api } from "@/lib/api";
+import {
+  api,
+  DashboardProfile,
+  EarningsResponse,
+  MandiListResponse,
+  PredictionHistoryResponse,
+  ScanHistoryResponse,
+} from "@/lib/api";
 import { useEffect, useState } from "react";
-import cropImg from "@/assets/crop-sample.jpg";
-import farmerImg from "@/assets/farmer-phone.jpg";
-import mandiImg from "@/assets/mandi.jpg";
-import heroImg from "@/assets/hero-farm.jpg";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -38,29 +41,19 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
-const UPLOADS = [
-  { src: cropImg, alt: "Basket of harvested tomatoes" },
-  { src: farmerImg, alt: "Farmer inspecting tomato plants" },
-  { src: mandiImg, alt: "Wholesale market stalls" },
-  { src: heroImg, alt: "Green paddy fields at sunrise" },
-];
-
-const NOTIFICATIONS = [
-  { title: "Tomato price up 4.2% at Yeshwanthpur", time: "12 min ago", tone: "text-primary" },
-  { title: "Heavy rain alert for Wednesday night", time: "2 h ago", tone: "text-destructive" },
-  { title: "Your Grade 1 report is ready to share", time: "Yesterday", tone: "text-sun-foreground" },
-  { title: "Kolar mandi added to your favourites", time: "3 days ago", tone: "text-muted-foreground" },
-];
+function settled<T>(result: PromiseSettledResult<T>): T | null {
+  return result.status === "fulfilled" ? result.value : null;
+}
 
 function Dashboard() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [authChecked, setAuthChecked] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [earnings, setEarnings] = useState<any>(null);
-  const [scanHistory, setScanHistory] = useState<any>(null);
-  const [predictionHistory, setPredictionHistory] = useState<any>(null);
-  const [mandiData, setMandiData] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<DashboardProfile | null>(null);
+  const [earnings, setEarnings] = useState<EarningsResponse | null>(null);
+  const [scanHistory, setScanHistory] = useState<ScanHistoryResponse | null>(null);
+  const [predictionHistory, setPredictionHistory] = useState<PredictionHistoryResponse | null>(null);
+  const [mandiData, setMandiData] = useState<MandiListResponse | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -75,27 +68,42 @@ function Dashboard() {
     if (!authChecked) return;
 
     const fetchDashboardData = async () => {
-      try {
-        const [profile, earningsData, scans, predictions, mandis] = await Promise.all([
-          api.getUserProfile(),
-          api.getEarnings(),
-          api.getScanHistory(),
-          api.getPredictionHistory(),
-          api.getNearbyMandis(undefined, undefined, 60, undefined, "Bengaluru Rural"),
-        ]);
-        setUserProfile(profile);
-        setEarnings(earningsData);
-        setScanHistory(scans);
-        setPredictionHistory(predictions);
-        setMandiData(mandis);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setLoading(false);
+      // Each request is independent: a farmer who denies location access
+      // should still see their real profile, earnings and scan history -
+      // only the nearby-mandis card should stay empty in that case.
+      const [profile, earningsData, scans, predictions, mandis] = await Promise.allSettled([
+        api.getUserProfile(),
+        api.getEarnings(),
+        api.getScanHistory(),
+        api.getPredictionHistory(),
+        api.getNearbyMandis(),
+      ]);
+
+      // api.ts's response interceptor clears the stored token as soon as
+      // any request comes back 401 (invalid/expired session). If that
+      // happened here, there's nothing to render - send the farmer back
+      // to log in instead of showing a dead-end "could not load" card.
+      if (!api.isAuthenticated()) {
+        navigate({ to: "/login", replace: true });
+        return;
       }
+
+      setUserProfile(settled(profile));
+      setEarnings(settled(earningsData));
+      setScanHistory(settled(scans));
+      setPredictionHistory(settled(predictions));
+      setMandiData(settled(mandis));
+
+      for (const result of [profile, earningsData, scans, predictions, mandis]) {
+        if (result.status === "rejected") {
+          console.error("Failed to fetch dashboard data:", result.reason);
+        }
+      }
+
+      setLoading(false);
     };
     fetchDashboardData();
-  }, [authChecked]);
+  }, [authChecked, navigate]);
 
   if (!authChecked) {
     return null;
@@ -119,35 +127,61 @@ function Dashboard() {
             <h2 className="text-sm font-bold uppercase tracking-wide text-muted-foreground">
               {t("dash.profile")}
             </h2>
-            <div className="mt-4 flex min-w-0 items-center gap-4">
-              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-3xl gradient-hero font-display text-xl font-extrabold text-primary-foreground">
-                {userProfile?.initials || "RK"}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-lg font-bold">{userProfile?.name || "Ramesh Kumar"}</p>
-                <p className="truncate text-sm text-muted-foreground">{userProfile?.location || "Hoskote"} · {userProfile?.farm_size || "4.2 acres"}</p>
-              </div>
-            </div>
-            <dl className="mt-6 grid grid-cols-3 gap-3 text-center">
-              {[
-                { l: "Analyses", v: userProfile?.stats?.analyses || "128" },
-                { l: "Grade 1", v: userProfile?.stats?.grade1_pct || "86%" },
-                { l: "Markets", v: userProfile?.stats?.markets || "6" },
-              ].map((s) => (
-                <div key={s.l} className="rounded-2xl bg-muted px-2 py-3">
-                  <dt className="text-[11px] text-muted-foreground">{s.l}</dt>
-                  <dd className="font-display text-lg font-extrabold">{s.v}</dd>
+            {loading ? (
+              <div className="mt-4 animate-pulse space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="h-16 w-16 shrink-0 rounded-3xl bg-muted" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-4 w-2/3 rounded bg-muted" />
+                    <div className="h-3 w-1/2 rounded bg-muted" />
+                  </div>
                 </div>
-              ))}
-            </dl>
-            <div className="mt-6 rounded-2xl bg-primary/8 p-4">
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                <Wallet className="h-4 w-4 text-primary" aria-hidden />
-                Season earnings
+                <div className="h-16 rounded-2xl bg-muted" />
+                <div className="h-16 rounded-2xl bg-muted" />
+              </div>
+            ) : userProfile ? (
+              <>
+                <div className="mt-4 flex min-w-0 items-center gap-4">
+                  <span className="grid h-16 w-16 shrink-0 place-items-center rounded-3xl gradient-hero font-display text-xl font-extrabold text-primary-foreground">
+                    {userProfile.initials}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-bold">{userProfile.name}</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {userProfile.location} · {userProfile.farm_size}
+                    </p>
+                  </div>
+                </div>
+                <dl className="mt-6 grid grid-cols-3 gap-3 text-center">
+                  {[
+                    { l: "Analyses", v: userProfile.stats.analyses },
+                    { l: "Grade 1", v: userProfile.stats.grade1_pct },
+                    { l: "Markets", v: userProfile.stats.markets },
+                  ].map((s) => (
+                    <div key={s.l} className="rounded-2xl bg-muted px-2 py-3">
+                      <dt className="text-[11px] text-muted-foreground">{s.l}</dt>
+                      <dd className="font-display text-lg font-extrabold">{s.v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="mt-6 rounded-2xl bg-primary/8 p-4">
+                  <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    <Wallet className="h-4 w-4 text-primary" aria-hidden />
+                    Season earnings
+                  </p>
+                  <p className="mt-1 font-display text-2xl font-extrabold text-primary">
+                    ₹{userProfile.season_earnings.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    +{userProfile.season_change_pct}% vs last season
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Could not load your profile. Please refresh the page.
               </p>
-              <p className="mt-1 font-display text-2xl font-extrabold text-primary">₹{userProfile?.season_earnings?.toLocaleString("en-IN") || "3,33,800"}</p>
-              <p className="text-xs text-muted-foreground">+{userProfile?.season_change_pct || 18}% vs last season</p>
-            </div>
+            )}
           </div>
 
           {/* Earnings chart */}
@@ -182,28 +216,34 @@ function Dashboard() {
           <div className="rounded-[2rem] border border-border bg-card p-6 shadow-soft">
             <h2 className="text-lg font-bold">{t("dash.recent")}</h2>
             <ul className="mt-4 divide-y divide-border">
-              {scanHistory?.scans.map((a: any) => (
-                <li key={a.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{a.crop}</p>
-                    <p className="text-xs text-muted-foreground">{a.date}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-bold ${
-                        a.grade === "Grade 1"
-                          ? "bg-primary/15 text-primary"
-                          : "bg-sun/25 text-sun-foreground"
-                      }`}
-                    >
-                      {a.grade}
-                    </span>
-                    <span className="font-display font-extrabold">
-                      ₹{a.price.toLocaleString("en-IN")}
-                    </span>
-                  </div>
+              {scanHistory?.scans.length ? (
+                scanHistory.scans.map((a) => (
+                  <li key={a.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-4">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{a.crop}</p>
+                      <p className="text-xs text-muted-foreground">{a.date}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          a.grade === "Grade 1"
+                            ? "bg-primary/15 text-primary"
+                            : "bg-sun/25 text-sun-foreground"
+                        }`}
+                      >
+                        {a.grade}
+                      </span>
+                      <span className="font-display font-extrabold">
+                        ₹{a.price.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </li>
+                ))
+              ) : (
+                <li className="py-4 text-sm text-muted-foreground">
+                  No crop analyses yet. Grade a crop to see it here.
                 </li>
-              ))}
+              )}
             </ul>
           </div>
 
@@ -211,50 +251,63 @@ function Dashboard() {
           <div className="rounded-[2rem] border border-border bg-card p-6 shadow-soft">
             <h2 className="text-lg font-bold">{t("dash.history")}</h2>
             <ul className="mt-4 space-y-3">
-              {predictionHistory?.predictions.map((h: any) => (
-                <li
-                  key={h.crop}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl bg-muted px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{h.crop}</p>
-                    <p className="text-xs text-muted-foreground">
-                      ₹{h.predicted_price} predicted · ₹{h.actual_price} actual
-                    </p>
-                  </div>
-                  <span
-                    className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
-                      h.accurate ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
-                    }`}
+              {predictionHistory?.predictions.length ? (
+                predictionHistory.predictions.map((h) => (
+                  <li
+                    key={h.crop}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl bg-muted px-4 py-3"
                   >
-                    <TrendingUp className="h-3.5 w-3.5" aria-hidden />
-                    {h.accurate ? "Accurate" : "Missed"}
-                  </span>
-                </li>
-              ))}
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{h.crop}</p>
+                      <p className="text-xs text-muted-foreground">
+                        ₹{h.predicted_price} predicted · ₹{h.actual_price} actual
+                      </p>
+                    </div>
+                    <span
+                      className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
+                        h.accurate ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"
+                      }`}
+                    >
+                      <TrendingUp className="h-3.5 w-3.5" aria-hidden />
+                      {h.accurate ? "Accurate" : "Missed"}
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-muted-foreground">No price predictions yet.</li>
+              )}
             </ul>
           </div>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-3">
-          {/* Uploads */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {/* Uploads - real photos from this farmer's own crop scans */}
           <div className="rounded-[2rem] border border-border bg-card p-6 shadow-soft">
             <h2 className="flex items-center gap-2 text-lg font-bold">
               <ImageIcon className="h-5 w-5 text-primary" aria-hidden />
               {t("dash.uploads")}
             </h2>
-            <ul className="mt-4 grid grid-cols-2 gap-3">
-              {UPLOADS.map((u) => (
-                <li key={u.alt} className="zoom-media rounded-2xl">
-                  <img
-                    src={u.src}
-                    alt={u.alt}
-                    loading="lazy"
-                    className="h-28 w-full rounded-2xl object-cover"
-                  />
-                </li>
-              ))}
-            </ul>
+            {scanHistory?.scans.some((s) => s.image_url) ? (
+              <ul className="mt-4 grid grid-cols-2 gap-3">
+                {scanHistory.scans
+                  .filter((s) => s.image_url)
+                  .slice(0, 4)
+                  .map((s) => (
+                    <li key={s.id} className="zoom-media rounded-2xl">
+                      <img
+                        src={s.image_url as string}
+                        alt={`${s.crop} scan`}
+                        loading="lazy"
+                        className="h-28 w-full rounded-2xl object-cover"
+                      />
+                    </li>
+                  ))}
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Photos from your crop scans will appear here.
+              </p>
+            )}
           </div>
 
           {/* Favourites */}
@@ -264,37 +317,27 @@ function Dashboard() {
               {t("dash.favorites")}
             </h2>
             <ul className="mt-4 space-y-3">
-              {mandiData?.mandis.slice(0, 4).map((m: any) => (
-                <li
-                  key={m.name}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl bg-muted px-4 py-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{m.name}</p>
-                    <p className="text-xs text-muted-foreground">{m.distance} km</p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-sun-foreground">
-                    <Star className="h-3.5 w-3.5 fill-current" aria-hidden />
-                    {m.rating}
-                  </span>
+              {mandiData?.mandis.length ? (
+                mandiData.mandis.slice(0, 4).map((m) => (
+                  <li
+                    key={m.name}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl bg-muted px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{m.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.distance} km</p>
+                    </div>
+                    <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-sun-foreground">
+                      <Star className="h-3.5 w-3.5 fill-current" aria-hidden />
+                      {m.rating}
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li className="text-sm text-muted-foreground">
+                  Allow location access to see nearby markets.
                 </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Notifications */}
-          <div className="rounded-[2rem] border border-border bg-card p-6 shadow-soft">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <Bell className="h-5 w-5 text-primary" aria-hidden />
-              {t("dash.notifications")}
-            </h2>
-            <ul className="mt-4 space-y-3">
-              {NOTIFICATIONS.map((n) => (
-                <li key={n.title} className="rounded-2xl bg-muted px-4 py-3">
-                  <p className={`text-sm font-semibold ${n.tone}`}>{n.title}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{n.time}</p>
-                </li>
-              ))}
+              )}
             </ul>
           </div>
         </div>

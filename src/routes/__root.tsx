@@ -17,6 +17,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Toaster } from "@/components/ui/sonner";
+import FloatingVoiceAssistant from "@/components/voice/FloatingVoiceAssistant";
 
 function NotFoundComponent() {
   return (
@@ -152,6 +153,7 @@ function RootComponent() {
             </main>
             {!isAuthPage && <Footer />}
           </div>
+          {!isAuthPage && pathname !== "/" && <FloatingVoiceAssistant />}
           <Toaster />
         </I18nProvider>
       </ThemeProvider>

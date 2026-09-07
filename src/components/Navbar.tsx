@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Logo } from "@/components/Logo";
 import { LanguageSelector } from "@/components/LanguageSelector";
+import { WeatherAlertsBell } from "@/components/WeatherAlertsBell";
 import { useI18n } from "@/i18n/I18nProvider";
 import { useTheme } from "@/components/theme-provider";
 import { api } from "@/lib/api";
@@ -74,6 +75,7 @@ export function Navbar() {
         </ul>
 
         <div className="flex items-center gap-2">
+          <WeatherAlertsBell />
           <Button
             variant="ghost"
             size="icon"
