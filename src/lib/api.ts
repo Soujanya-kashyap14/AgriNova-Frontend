@@ -143,6 +143,14 @@ export interface MandiListResponse {
   sort_order?: string;
 
   farthest_distance_km?: number;
+
+  location_label?: string;
+
+  searched_latitude?: number;
+
+  searched_longitude?: number;
+
+  ceda_live?: boolean;
 }
 
 export interface MandiStatus {
@@ -303,10 +311,13 @@ export function setToken(
 ): void {
   if (typeof window === "undefined") return;
 
-  // Clear both stores first so a stale token from a previous
-  // "remember me" choice never lingers alongside the new one.
+  // Clear both stores (and the legacy "access_token" key) first so a
+  // stale token from a previous "remember me" choice never lingers
+  // alongside the new one.
   localStorage.removeItem("token");
+  localStorage.removeItem("access_token");
   sessionStorage.removeItem("token");
+  sessionStorage.removeItem("access_token");
 
   const store = persistence === "session" ? sessionStorage : localStorage;
   store.setItem("token", token);
@@ -622,157 +633,51 @@ export async function getWeather(
 
 export async function getNearbyMandis(
   lat?: number,
-  lng?: number
+  lng?: number,
+  _radiusKm?: number,
+  _crop?: string,
+  location?: string,
+  sortBy: "distance" | "rating" = "distance",
 ): Promise<MandiListResponse> {
-
-  let latitude =
-    lat;
-
-  let longitude =
-    lng;
-
-  // ----------------------------------------------------------
-  // Get real browser GPS when coordinates aren't supplied.
-  // ----------------------------------------------------------
+  let latitude = lat;
+  let longitude = lng;
+  const placeName = location?.trim() || undefined;
 
   if (
-    latitude === undefined ||
-    longitude === undefined ||
-    latitude === null ||
-    longitude === null
+    (latitude === undefined || longitude === undefined) &&
+    !placeName
   ) {
-
-    const location =
-      await getBrowserLocation();
-
-    latitude =
-      location.latitude;
-
-    longitude =
-      location.longitude;
+    const gps = await getBrowserLocation();
+    latitude = gps.latitude;
+    longitude = gps.longitude;
   }
 
-  // ----------------------------------------------------------
-  // Validate coordinates.
-  // ----------------------------------------------------------
+  const params = new URLSearchParams();
 
   if (
-    !Number.isFinite(
-      latitude
-    ) ||
-    !Number.isFinite(
-      longitude
-    )
+    latitude !== undefined &&
+    longitude !== undefined &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude)
   ) {
-
-    throw new Error(
-      "Invalid GPS coordinates."
-    );
+    params.set("lat", String(latitude));
+    params.set("lng", String(longitude));
   }
 
-  if (
-    latitude < -90 ||
-    latitude > 90
-  ) {
-
-    throw new Error(
-      "Invalid latitude."
-    );
+  if (placeName) {
+    params.set("location", placeName);
   }
 
-  if (
-    longitude < -180 ||
-    longitude > 180
-  ) {
+  params.set("sort_by", sortBy === "rating" ? "rating" : "distance");
 
-    throw new Error(
-      "Invalid longitude."
-    );
+  if (!params.has("lat") && !params.has("location")) {
+    throw new Error("Provide GPS coordinates or a location name.");
   }
 
-  // ----------------------------------------------------------
-  // IMPORTANT:
-  //
-  // There is intentionally NO:
-  //
-  // radius
-  // limit
-  //
-  // query parameter.
-  // ----------------------------------------------------------
-
-  const params =
-    new URLSearchParams();
-
-  params.set(
-    "lat",
-    String(latitude)
-  );
-
-  params.set(
-    "lng",
-    String(longitude)
-  );
-
-  const endpoint =
-    `/mandis/nearby?${params.toString()}`;
-
-  console.log(
-    "=========================================="
-  );
-
-  console.log(
-    "[MANDI] Searching ALL Karnataka tomato mandis"
-  );
-
-  console.log(
-    "[MANDI] Latitude:",
-    latitude
-  );
-
-  console.log(
-    "[MANDI] Longitude:",
-    longitude
-  );
-
-  console.log(
-    "[MANDI] Radius: NONE"
-  );
-
-  console.log(
-    "[MANDI] Limit: NONE"
-  );
-
-  console.log(
-    "[MANDI] Sorting: nearest -> farthest"
-  );
-
-  console.log(
-    "[MANDI] Endpoint:",
-    `${API_BASE_URL}${endpoint}`
-  );
-
-  console.log(
-    "=========================================="
-  );
-
-  const response =
-    await client.get<MandiListResponse>(
-      endpoint,
-      {
-        timeout: 120000,
-      }
-    );
-
-  console.log(
-    "[MANDI] Total Karnataka mandis:",
-    response.data.mandi_count
-  );
-
-  console.log(
-    "[MANDI] Response:",
-    response.data
-  );
+  const endpoint = `/mandis/nearby?${params.toString()}`;
+  const response = await client.get<MandiListResponse>(endpoint, {
+    timeout: 120000,
+  });
 
   return response.data;
 }
